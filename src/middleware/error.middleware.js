@@ -13,11 +13,14 @@ export function errorHandler(err, req, res, next) {
         console.error(err);
     }
 
-    res.status(statusCode).json({
+    const payload = {
         status: "error",
-        message:
-            statusCode >= 500
-                ? "Internal server error"
-                : err.message
-    });
+        message: statusCode >= 500 ? "Internal server error" : err.message
+    };
+
+    if (statusCode < 500 && err.errors) {
+        payload.errors = err.errors;
+    }
+
+    res.status(statusCode).json(payload);
 }
