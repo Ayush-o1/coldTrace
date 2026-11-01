@@ -2,8 +2,20 @@ import { prisma } from "../config/prisma.js";
 import { AppError } from "../utils/app-error.js";
 
 /**
- * Middleware that verifies the authenticated user belongs to the target organization.
- * Prevents IDOR and enforces tenant data isolation.
+ * Organization Membership Gatekeeper (Tenant Authorization & IDOR Defense)
+ *
+ * Engineering Concept — Multi-Tenancy & Insecure Direct Object References (IDOR):
+ * In a multi-tenant application, an attacker may attempt to access another organization's private data
+ * simply by guessing or substituting an organization ID in the request path (e.g. /api/organizations/:id).
+ *
+ * This middleware prevents IDOR by enforcing two strict rules:
+ * 1. The client-supplied organization ID is never trusted on its own.
+ * 2. The database is queried using the compound unique key `(user_id, organization_id)`.
+ *    If no membership row exists, the user is rejected immediately with 403 Forbidden.
+ *
+ * Downstream Benefit:
+ * Once authorized, `req.membership` (role, joined date) and `req.organization` (name, slug) are attached
+ * to the request object, eliminating redundant database queries in controllers and services.
  *
  * @param {string} [paramKey="organizationId"] - Name of the route parameter containing organization ID
  */
@@ -47,10 +59,18 @@ export function requireOrgMember(paramKey = "organizationId") {
 }
 
 /**
- * Middleware that verifies the member possesses one of the allowed roles.
- * Must be preceded by requireOrgMember.
+ * Role-Based Access Control (RBAC) Guard
  *
- * @param  {...("ADMIN" | "MEMBER" | "VIEWER")} allowedRoles
+ * Engineering Concept — Least Privilege Enforcement:
+ * Verifies that the authenticated member has one of the required roles before executing protected actions.
+ *
+ * Permission Invariants:
+ * - ADMIN: Organization owner, full rights to manage team members, services, and all incident lifecycles.
+ * - MEMBER: Incident responder, permitted to create/update incidents and post updates, but forbidden
+ *   from managing team memberships or archiving services.
+ * - VIEWER: Read-only stakeholder, forbidden from creating, mutating, or transitioning any resource.
+ *
+ * @param  {...("ADMIN" | "MEMBER" | "VIEWER")} allowedRoles - Permitted roles for this route
  */
 export function requireRole(...allowedRoles) {
     return (req, res, next) => {
@@ -65,3 +85,4 @@ export function requireRole(...allowedRoles) {
         next();
     };
 }
+

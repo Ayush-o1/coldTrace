@@ -35,3 +35,4 @@ export const updateServiceSchema = z.object({
         .optional(),
     isArchived: z.boolean().optional()
 });
+

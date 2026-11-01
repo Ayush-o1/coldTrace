@@ -25,3 +25,4 @@ export async function getPublicStatus(req, res, next) {
         next(error);
     }
 }
+

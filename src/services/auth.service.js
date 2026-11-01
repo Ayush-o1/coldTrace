@@ -10,7 +10,20 @@ import { AppError } from "../utils/app-error.js";
 const REFRESH_TOKEN_DAYS = Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS) || 7;
 
 /**
- * Register a new user account with hashed password.
+ * Registers a new user account with a secure bcrypt password hash.
+ *
+ * Implementation Details:
+ * 1. Email Normalization: The email is trimmed and converted to lowercase before lookup or insertion.
+ *    PostgreSQL unique constraints depend on collation; normalising in application logic guarantees
+ *    that 'User@Example.com' and 'user@example.com' collide predictably.
+ * 2. Password Hashing: Plain-text passwords are never persisted. They are hashed using bcrypt with 10 salt rounds.
+ * 3. Sanitized Projection: Only safe fields (id, name, email, createdAt) are returned. `passwordHash` is excluded.
+ *
+ * @param {object} params
+ * @param {string} params.name - User's display name
+ * @param {string} params.email - Unique email address
+ * @param {string} params.password - Plain-text candidate password
+ * @returns {Promise<object>} Sanitized user record
  */
 export async function register({ name, email, password }) {
     const normalizedEmail = email.trim().toLowerCase();
@@ -43,7 +56,20 @@ export async function register({ name, email, password }) {
 }
 
 /**
- * Authenticate credentials, create an active session, and issue access + refresh tokens.
+ * Authenticates user credentials, generates an active session, and issues dual tokens.
+ *
+ * Security Considerations:
+ * 1. Account Enumeration Defense: If the email does not exist, or the password does not match,
+ *    the exact same generic message ("Invalid email or password", 401) is returned.
+ * 2. Token Segregation:
+ *    - Access Token: Short-lived JWT (15m) carrying user identity claims (userId, email, jti).
+ *    - Refresh Token: Long-lived opaque string (7d). Stored in the database as a SHA-256 hash.
+ *      Storing only the hash ensures that a database compromise does not yield valid session tokens.
+ *
+ * @param {object} params
+ * @param {string} params.email - Candidate email
+ * @param {string} params.password - Candidate password
+ * @returns {Promise<{ user: object, accessToken: string, refreshToken: string }>}
  */
 export async function login({ email, password }) {
     const normalizedEmail = email.trim().toLowerCase();
@@ -93,7 +119,19 @@ export async function login({ email, password }) {
 }
 
 /**
- * Rotate refresh session: invalidate previous session, generate a fresh token pair.
+ * Rotates an active refresh session to issue a fresh JWT and refresh token.
+ *
+ * Engineering Concept — Refresh Token Rotation (OWASP Best Practice):
+ * Every time a refresh token is used, the previous session is immediately revoked (`revokedAt = now()`)
+ * and a new session with a new refresh token is created inside an atomic transaction.
+ *
+ * Why this is essential:
+ * If an attacker intercepts a refresh token and attempts to use it after the legitimate user has already
+ * refreshed, the database check detects that the token is already revoked, stopping token replay attacks.
+ *
+ * @param {object} params
+ * @param {string} params.refreshToken - Raw refresh token from cookie or body
+ * @returns {Promise<{ user: object, accessToken: string, refreshToken: string }>}
  */
 export async function refreshSession({ refreshToken }) {
     if (!refreshToken) {
@@ -192,3 +230,4 @@ export async function getUserProfile(userId) {
 
     return user;
 }
+

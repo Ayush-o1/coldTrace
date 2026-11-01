@@ -4,6 +4,17 @@ import { AppError } from "../utils/app-error.js";
 
 /**
  * Creates a new software service scoped to an organization.
+ *
+ * Engineering Concept — Organization-Scoped Uniqueness:
+ * Service slugs must be unique within an organization, but different organizations are permitted to
+ * use identical slugs (e.g. Org A can have 'auth-service', and Org B can also have 'auth-service').
+ * This is enforced at the database level by `@@unique([organizationId, slug])`.
+ *
+ * @param {object} params
+ * @param {string} params.organizationId - Tenant organization ID
+ * @param {string} params.name - Display name of the service
+ * @param {string} [params.slug] - Optional URL-safe slug
+ * @param {string} params.actorId - User creating the service
  */
 export async function createService({ organizationId, name, slug, actorId }) {
     const finalSlug = slug ? slugify(slug) : slugify(name);
@@ -143,6 +154,20 @@ export async function updateService({ organizationId, serviceId, name, slug, isA
 
 /**
  * Archives a service instead of hard deleting it to preserve relational integrity with incidents.
+ *
+ * Engineering Concept — Soft-Deletion / Archival vs. Hard-Deletion:
+ * In an incident management system, operational history is critical for post-mortems and compliance.
+ * If a service is hard-deleted (`DELETE FROM services`):
+ * 1. Historical incidents referencing this service would either have their foreign key violated,
+ *    or cascade-delete all past incident records, destroying the organization's incident track record.
+ * 2. By setting `isArchived: true`:
+ *    - The service is excluded from active incident reporting and health calculations.
+ *    - All historical incidents, post-mortems, and timeline audit records remain completely intact.
+ *
+ * @param {object} params
+ * @param {string} params.organizationId - Target organization ID
+ * @param {string} params.serviceId - Service UUID to archive
+ * @param {string} params.actorId - User performing the archival
  */
 export async function archiveService({ organizationId, serviceId, actorId }) {
     await getServiceById({ organizationId, serviceId });
@@ -166,3 +191,4 @@ export async function archiveService({ organizationId, serviceId, actorId }) {
 
     return { message: "Service archived successfully" };
 }
+

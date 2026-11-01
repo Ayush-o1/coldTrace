@@ -195,3 +195,4 @@ This document records the architectural and engineering decisions made during th
 - **Reasoning**: The public endpoint performs a separate, deliberate query selecting only public services, public incident titles, and updates explicitly marked `PUBLIC`. It completely omits author user IDs, responder emails, internal notes, and audit logs.
 - **Trade-offs**: Two separate query paths for incident data (private vs public).
 - **Future scaling**: The public status endpoint is cacheable via a CDN (e.g. Cloudflare) with a 30-second cache header, protecting the database from traffic surges during major public outages.
+

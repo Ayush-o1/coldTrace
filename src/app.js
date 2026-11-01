@@ -13,6 +13,17 @@ import { errorHandler } from "./middleware/error.middleware.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "../public");
 
+/**
+ * coldTrace Express Application Setup
+ *
+ * Architectural Note:
+ * app.js and server.js are intentionally separated.
+ * - app.js configures middleware, static files, and routes, and exports the Express app instance.
+ * - server.js imports app and calls app.listen() to bind to a TCP port.
+ *
+ * This separation allows automated test suites (via Supertest) to import app.js directly and execute
+ * fast in-memory HTTP simulations without binding to a physical network port or causing port collisions.
+ */
 const app = express();
 
 // Parse incoming JSON request bodies and cookies.

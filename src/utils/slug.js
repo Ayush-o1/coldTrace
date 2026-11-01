@@ -12,3 +12,4 @@ export function slugify(text) {
         .replace(/[\s\W-]+/g, "-") // Replace spaces and non-word characters with dashes
         .replace(/^-+|-+$/g, "");   // Remove leading/trailing dashes
 }
+

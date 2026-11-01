@@ -12,3 +12,4 @@ export const createUpdateSchema = z.object({
         })
         .default("INTERNAL")
 });
+

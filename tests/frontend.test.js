@@ -37,3 +37,4 @@ test("Frontend Integration (Phase 11)", async (t) => {
         assert.match(appRes.headers["content-type"], /javascript/);
     });
 });
+

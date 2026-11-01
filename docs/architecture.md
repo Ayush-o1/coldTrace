@@ -197,3 +197,21 @@ The public status page (`/status/:orgSlug` and `/api/public/status/:orgSlug`) is
 To prevent confidential data leaks, coldTrace strictly decouples public responses from internal representations:
 - **Exposed**: Organization name, slug, overall health status, non-archived services with health pills, active public incident titles, public updates (`visibility: PUBLIC`), and timestamps.
 - **Never Exposed**: Internal updates (`visibility: INTERNAL`), user email addresses, author names/IDs, user IDs, internal root-cause notes, database IDs of users, or audit logs.
+
+---
+
+## 9. Key Architectural Components & Code Mapping
+
+| Architectural Area | Primary Files | Key Functions / Symbols | Responsibility |
+|---|---|---|---|
+| **Server & App Factory** | `src/app.js`, `src/server.js` | `createApp`, `server.listen` | Express middleware pipeline, route registration, and decoupling app from port binding for testability. |
+| **Authentication & Tokens** | `src/services/auth.service.js`, `src/utils/token.js`, `src/middleware/auth.middleware.js` | `registerUser`, `loginUser`, `refreshAccessToken`, `logoutUser`, `authenticate` | Bcrypt password hashing, 15m JWT access tokens, 7d SHA-256 hashed refresh sessions in DB, token revocation. |
+| **Multi-Tenancy & RBAC** | `src/middleware/rbac.middleware.js`, `src/services/organization.service.js` | `requireOrgMember`, `requireRole`, `createOrganization`, `updateMemberRole`, `removeMember` | Tenant verification via `(userId, organizationId)`, role checks (ADMIN/MEMBER/VIEWER), and Last Admin Protection invariant. |
+| **Service Catalog** | `src/services/service.service.js`, `src/routes/service.routes.js` | `createService`, `updateService`, `archiveService` | Org-scoped slug uniqueness (`@@unique([organizationId, slug])`), soft-delete / archiving. |
+| **Incident Lifecycle** | `src/services/incident.service.js` | `ALLOWED_TRANSITIONS`, `createIncident`, `transitionIncidentStatus`, `validateAssignee`, `validateServices` | Enforces one-way state machine, prevents cross-tenant service/assignee links, atomic status transitions. |
+| **Audit Logs & Updates** | `src/services/update.service.js` | `createIncidentUpdate`, `getIncidentTimeline`, `getOrganizationAuditLogs` | Atomic transaction writing update + audit entry, polymorphic entity logging, internal vs public update separation. |
+| **Dynamic Health** | `src/utils/health.js`, `src/services/health.service.js` | `calculateServiceHealth`, `calculateOverallHealth`, `getOrgHealthOverview` | Computes service and org health on-the-fly from active (`TRIGGERED`, `ACKNOWLEDGED`) incidents with zero state drift. |
+| **Public Status Page** | `src/services/health.service.js`, `src/routes/public.routes.js` | `getPublicStatusPage` | Unauthenticated public view strictly projecting customer-safe fields, excluding internal notes and employee PII. |
+| **Frontend Clients** | `public/index.html`, `public/js/app.js`, `public/status.html`, `public/js/status.js` | Vanilla JS SPA & Public Page | Responsive incident operations dashboard and standalone customer status page consuming REST API. |
+
+

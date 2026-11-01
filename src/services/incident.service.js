@@ -3,7 +3,15 @@ import { AppError } from "../utils/app-error.js";
 
 /**
  * Valid incident lifecycle state transitions.
- * Enforces a strict one-way lifecycle: TRIGGERED -> ACKNOWLEDGED -> RESOLVED -> CLOSED.
+ * Enforces a strict one-way lifecycle state machine:
+ * TRIGGERED -> ACKNOWLEDGED -> RESOLVED -> CLOSED.
+ *
+ * Why this state machine design is essential:
+ * In incident response, skipping phases (e.g. going straight from TRIGGERED to RESOLVED
+ * without acknowledgment) creates accountability gaps where no responder is verified as owning
+ * the triage process. Disallowing regressions (e.g. CLOSED -> TRIGGERED) ensures completed
+ * incident postmortems and audit logs remain immutable historical records. If a recurrence happens,
+ * standard site reliability engineering practice dictates creating a new linked incident.
  */
 export const ALLOWED_TRANSITIONS = {
     TRIGGERED: ["ACKNOWLEDGED"],
@@ -14,6 +22,16 @@ export const ALLOWED_TRANSITIONS = {
 
 /**
  * Validates that an assignee belongs to the target organization.
+ *
+ * Why this check cannot be replaced by a simple SQL foreign key constraint:
+ * Foreign keys ensure referential integrity (i.e. the assigned user ID exists in the `users` table),
+ * but they do NOT enforce multi-tenant boundaries. Without this check, an attacker in Org A
+ * could assign an incident to a user in Org B, leaking incident titles, descriptions, and user details
+ * across tenant boundaries (Insecure Direct Object Reference / Tenant Boundary Breach).
+ *
+ * @param {string} organizationId - Target organization UUID
+ * @param {string|null} assignedToId - Assigned user UUID
+ * @throws {AppError} 400 Bad Request if user is not an active member
  */
 async function validateAssignee(organizationId, assignedToId) {
     if (!assignedToId) return;
@@ -34,6 +52,16 @@ async function validateAssignee(organizationId, assignedToId) {
 
 /**
  * Validates that all associated services belong to the target organization.
+ *
+ * Security & Data Isolation Rationale:
+ * Similar to assignee validation, foreign keys only guarantee that service IDs exist,
+ * not that they belong to the calling organization. By counting the services matching both
+ * the target IDs and the tenant's `organizationId`, we ensure an organization cannot link,
+ * corrupt, or observe another organization's infrastructure components.
+ *
+ * @param {string} organizationId - Target organization UUID
+ * @param {string[]} serviceIds - Array of service UUIDs
+ * @throws {AppError} 400 Bad Request if any service does not belong to the organization
  */
 async function validateServices(organizationId, serviceIds) {
     if (!serviceIds || serviceIds.length === 0) return;
@@ -53,6 +81,22 @@ async function validateServices(organizationId, serviceIds) {
 
 /**
  * Creates a new incident within an organization.
+ *
+ * Transaction & Atomicity Rationale:
+ * Creating an incident, linking its associated services in the junction table (`incident_services`),
+ * and generating the initial immutable audit log entry (`INCIDENT_CREATED`) must succeed or fail as
+ * an atomic unit. If audit log insertion were separated and failed, un-audited incidents would exist,
+ * violating SOC2/ISO27001 regulatory compliance requirements.
+ *
+ * @param {Object} params
+ * @param {string} params.organizationId - Target organization UUID
+ * @param {string} params.createdById - User UUID creating the incident
+ * @param {string} params.title - Summary of the incident
+ * @param {string} params.description - Detailed timeline / symptoms
+ * @param {string} params.severity - LOW | MEDIUM | HIGH | CRITICAL
+ * @param {string|null} [params.assignedToId] - Optional initial responder
+ * @param {string[]} [params.serviceIds] - Optional array of impacted service UUIDs
+ * @returns {Promise<Object>} Created and formatted incident
  */
 export async function createIncident({
     organizationId,
@@ -327,7 +371,26 @@ export async function updateIncident({
 
 /**
  * Transitions an incident to a new lifecycle state.
- * Validates transitions against the strict state machine and prevents race conditions.
+ *
+ * Concurrency & Integrity Considerations:
+ * In a high-pressure production outage, multiple on-call engineers may view and attempt to
+ * update an incident simultaneously. To prevent race conditions (such as two conflicting transitions
+ * occurring at once or bypassing intermediate status requirements), the read of the current status,
+ * transition validation, database status update, and audit log creation are wrapped in an atomic
+ * `prisma.$transaction`.
+ *
+ * Idempotency:
+ * If an engineer or automated webhook submits a transition to the status the incident is already in
+ * (e.g. ACKNOWLEDGED when already ACKNOWLEDGED), the operation returns early as a safe no-op.
+ * This avoids duplicate audit logs and prevents noisy errors on repeated client requests.
+ *
+ * @param {Object} params
+ * @param {string} params.organizationId - Tenant organization UUID
+ * @param {string} params.incidentId - Incident UUID to transition
+ * @param {string} params.targetStatus - Next lifecycle state (ACKNOWLEDGED, RESOLVED, CLOSED)
+ * @param {string} params.actorId - User UUID triggering the status change
+ * @returns {Promise<Object>} Formatted updated incident
+ * @throws {AppError} 404 if not found in tenant, 400 if state transition is invalid
  */
 export async function transitionIncidentStatus({
     organizationId,

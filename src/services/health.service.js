@@ -2,10 +2,25 @@ import { prisma } from "../config/prisma.js";
 import { calculateServiceHealth, calculateOverallHealth } from "../utils/health.js";
 import { AppError } from "../utils/app-error.js";
 
+// Active incident statuses that impact system availability
 const ACTIVE_STATUSES = ["TRIGGERED", "ACKNOWLEDGED"];
 
 /**
  * Returns comprehensive health rollup for an authenticated organization dashboard.
+ *
+ * Dynamic Health Derivation vs Stored State:
+ * In coldTrace, service and organization health are derived on-the-fly from active incidents
+ * rather than persisted as a static `healthStatus` column on the `services` table.
+ *
+ * Why this avoids distributed state drift:
+ * If service health were persisted as a column, every incident creation, status transition,
+ * severity edit, or resolution would require updating multiple tables. A missed update or
+ * concurrent write could leave a service marked as "CRITICAL_OUTAGE" long after all incidents
+ * were resolved. By computing health dynamically from `TRIGGERED` and `ACKNOWLEDGED` incidents,
+ * the health status is guaranteed to be 100% mathematically consistent with the active incident state.
+ *
+ * @param {string} organizationId - Tenant organization UUID
+ * @returns {Promise<Object>} Rollup of overallStatus, per-service health, and incident severity counts
  */
 export async function getOrgHealthOverview(organizationId) {
     const services = await prisma.service.findMany({
@@ -64,7 +79,20 @@ export async function getOrgHealthOverview(organizationId) {
 
 /**
  * Returns sanitized, public-safe status page data without authentication.
- * Never leaks internal updates, user emails, actor IDs, or confidential records.
+ *
+ * Zero-Leakage Data Projection Architecture:
+ * Public status pages are accessible by customers, stakeholders, and internet crawlers without
+ * any authentication credentials. Therefore, this query enforces strict projection boundaries:
+ * 1. Only active incidents (`TRIGGERED`, `ACKNOWLEDGED`) affecting public operational status are fetched.
+ * 2. Only updates explicitly flagged as `visibility: "PUBLIC"` are included; internal engineering notes
+ *    are completely omitted at the database query level (`updates: { where: { visibility: "PUBLIC" } }`).
+ * 3. User information (responder emails, full names, assigned user IDs, author IDs) is completely excluded
+ *    to prevent identity harvesting, phishing attacks, and internal org structure reconnaissance.
+ * 4. Archived services are excluded (`isArchived: false`).
+ *
+ * @param {string} orgSlug - Public URL slug of the organization
+ * @returns {Promise<Object>} Sanitized status report containing overallStatus, active public incidents, and service health
+ * @throws {AppError} 404 if organization with slug does not exist
  */
 export async function getPublicStatusPage(orgSlug) {
     const organization = await prisma.organization.findUnique({
@@ -163,3 +191,4 @@ export async function getPublicStatusPage(orgSlug) {
         incidents: publicIncidents
     };
 }
+

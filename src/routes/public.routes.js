@@ -7,3 +7,4 @@ const router = Router();
 router.get("/status/:orgSlug", healthController.getPublicStatus);
 
 export default router;
+

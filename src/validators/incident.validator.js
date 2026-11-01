@@ -65,3 +65,4 @@ export const listIncidentsQuerySchema = z.object({
     serviceId: z.string().regex(UUID_REGEX).optional(),
     assignedToId: z.string().regex(UUID_REGEX).optional()
 });
+

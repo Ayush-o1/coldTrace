@@ -55,3 +55,4 @@ export function calculateOverallHealth(statuses = []) {
 
     return HEALTH_STATUS.OPERATIONAL;
 }
+

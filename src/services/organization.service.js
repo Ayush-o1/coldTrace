@@ -4,6 +4,23 @@ import { AppError } from "../utils/app-error.js";
 
 /**
  * Creates a new organization and atomically assigns the creator as ADMIN.
+ *
+ * Engineering Concept — Transactional Consistency in Tenant Creation:
+ * Creating an organization requires two coupled database records:
+ * 1. The `organizations` row defining the tenant.
+ * 2. A `memberships` row linking the creator user with the `ADMIN` role.
+ *
+ * Why this MUST run inside a single `prisma.$transaction`:
+ * If organization creation succeeded but membership creation failed (due to a transient network error,
+ * process kill, or DB constraint), an orphaned organization would exist in PostgreSQL with zero administrators.
+ * No user would ever be able to administer that organization.
+ * The transaction guarantees atomicity: both records commit, or the entire operation rolls back.
+ *
+ * @param {object} params
+ * @param {string} params.name - Human-readable organization name
+ * @param {string} [params.slug] - Optional URL-safe slug (auto-generated if omitted)
+ * @param {string} params.userId - Authenticated creator's UUID
+ * @returns {Promise<object>} Created organization with creator's role
  */
 export async function createOrganization({ name, slug, userId }) {
     const finalSlug = slug ? slugify(slug) : slugify(name);
@@ -196,7 +213,19 @@ export async function addMember({ organizationId, email, role = "MEMBER", actorI
 }
 
 /**
- * Updates a member's role while protecting against demoting the last administrator.
+ * Updates a member's role while enforcing the Last Administrator Protection invariant.
+ *
+ * Business Invariant — Last Administrator Protection:
+ * An organization must ALWAYS have at least one active administrator.
+ * If an administrator attempts to demote their own or another admin's role to MEMBER or VIEWER,
+ * we query the count of existing ADMINs. If `adminCount <= 1`, the demotion is strictly rejected with 400.
+ * This guarantees that an organization can never lose administrative oversight.
+ *
+ * @param {object} params
+ * @param {string} params.organizationId - Target organization ID
+ * @param {string} params.memberId - Membership row ID to update
+ * @param {string} params.newRole - Target role (ADMIN | MEMBER | VIEWER)
+ * @param {string} params.actorId - User performing the role update
  */
 export async function updateMemberRole({ organizationId, memberId, newRole, actorId }) {
     const membership = await prisma.membership.findUnique({
@@ -266,7 +295,16 @@ export async function updateMemberRole({ organizationId, memberId, newRole, acto
 }
 
 /**
- * Removes a member while preventing removal of the last administrator.
+ * Removes a member from an organization while enforcing the Last Administrator Protection invariant.
+ *
+ * Business Invariant:
+ * Just like role demotion, deleting an ADMIN membership is blocked if `adminCount <= 1`.
+ * In addition, deleting a membership triggers an audit log entry in the same transaction for compliance.
+ *
+ * @param {object} params
+ * @param {string} params.organizationId - Target organization ID
+ * @param {string} params.memberId - Membership row ID to delete
+ * @param {string} params.actorId - User performing the removal
  */
 export async function removeMember({ organizationId, memberId, actorId }) {
     const membership = await prisma.membership.findUnique({
@@ -313,3 +351,4 @@ export async function removeMember({ organizationId, memberId, actorId }) {
 
     return { message: "Member removed successfully" };
 }
+
