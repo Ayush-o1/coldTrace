@@ -20,8 +20,15 @@ export function validate(schema, source = "body") {
             return next(new AppError("Validation failed", 400, formattedErrors));
         }
 
-        // Replace request property with parsed and sanitized data (e.g. trimmed, transformed)
-        req[source] = result.data;
+        // Expose validated and sanitized data on req.validated and req[source]
+        if (!req.validated) {
+            req.validated = {};
+        }
+        req.validated[source] = result.data;
+
+        if (source === "body") {
+            req.body = result.data;
+        }
         next();
     };
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as orgController from "../controllers/organization.controller.js";
 import serviceRoutes from "./service.routes.js";
+import incidentRoutes from "./incident.routes.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireOrgMember, requireRole } from "../middleware/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
@@ -22,6 +23,7 @@ router.get("/:organizationId/members", authenticate, requireOrgMember(), orgCont
 
 // Mount nested domain resources
 router.use("/:organizationId/services", serviceRoutes);
+router.use("/:organizationId/incidents", incidentRoutes);
 
 // Member management (ADMIN only)
 router.post(
