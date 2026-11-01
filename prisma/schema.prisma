@@ -1,0 +1,179 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// These roles describe membership; API authorization is implemented in a later phase.
+enum MembershipRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// Incident lifecycle states
+enum IncidentStatus {
+  TRIGGERED
+  ACKNOWLEDGED
+  RESOLVED
+  CLOSED
+}
+
+// Incident severity levels
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Incident update visibility
+enum UpdateVisibility {
+  INTERNAL
+  PUBLIC
+}
+
+// User accounts
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships       Membership[]
+  createdIncidents  Incident[]       @relation("IncidentCreator")
+  assignedIncidents Incident[]       @relation("IncidentAssignee")
+  incidentUpdates   IncidentUpdate[] @relation("IncidentUpdateAuthor")
+  auditLogs         AuditLog[]       @relation("AuditLogActor")
+
+  @@map("users")
+}
+
+// Companies or teams
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  services    Service[]
+  incidents   Incident[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+// A separate membership row lets one user join many organizations with a role per organization.
+model Membership {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  role           MembershipRole @default(MEMBER)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+// Software services managed by organizations
+model Service {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  slug           String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  incidentServices IncidentService[]
+
+  @@unique([organizationId, slug])
+  @@map("services")
+}
+
+// Named relations distinguish a user's creator and assignee roles on the same model.
+model Incident {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  createdById    String           @map("created_by_id") @db.Uuid
+  assignedToId   String?          @map("assigned_to_id") @db.Uuid
+  title          String
+  description    String
+  status         IncidentStatus   @default(TRIGGERED)
+  severity       IncidentSeverity
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  createdBy    User              @relation("IncidentCreator", fields: [createdById], references: [id])
+  assignedTo   User?             @relation("IncidentAssignee", fields: [assignedToId], references: [id])
+  services     IncidentService[]
+  updates      IncidentUpdate[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([assignedToId, status])
+  @@map("incidents")
+}
+
+// Explicit junction model makes the incident-service pair unique and leaves room for future metadata.
+model IncidentService {
+  id         String @id @default(uuid()) @db.Uuid
+  incidentId String @map("incident_id") @db.Uuid
+  serviceId  String @map("service_id") @db.Uuid
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  service  Service  @relation(fields: [serviceId], references: [id])
+
+  @@unique([incidentId, serviceId])
+  @@index([serviceId, incidentId])
+  @@map("incident_services")
+}
+
+// Updates posted on incidents
+model IncidentUpdate {
+  id         String           @id @default(uuid()) @db.Uuid
+  incidentId String           @map("incident_id") @db.Uuid
+  authorId   String           @map("author_id") @db.Uuid
+  message    String
+  visibility UpdateVisibility @default(INTERNAL)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  author   User     @relation("IncidentUpdateAuthor", fields: [authorId], references: [id])
+
+  @@index([incidentId, createdAt])
+  @@map("incident_updates")
+}
+
+// Keep audit history independent of entity deletion; entityId is polymorphic and has no FK by design.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorId        String   @map("actor_id") @db.Uuid
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id")
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  actor        User         @relation("AuditLogActor", fields: [actorId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
