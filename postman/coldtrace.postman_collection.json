@@ -1,0 +1,410 @@
+{
+  "info": {
+    "_postman_id": "c1f7b8a0-2f9a-4c91-9e73-9a4f6611d234",
+    "name": "coldTrace API",
+    "description": "Complete Postman collection for the coldTrace Incident Management Platform (Tier 1 MVP).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alex Mercer\",\n  \"email\": \"alex@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json?.data?.accessToken) {",
+                  "  pm.environment.set('accessToken', json.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex@example.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "Create Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json?.data?.organization?.id) {",
+                  "  pm.environment.set('orgId', json.data.organization.id);",
+                  "  pm.environment.set('orgSlug', json.data.organization.slug);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Cloud Services\",\n  \"slug\": \"acme-cloud\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations", "host": ["{{baseUrl}}"], "path": ["api", "organizations"] }
+          }
+        },
+        {
+          "name": "List User Organizations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations", "host": ["{{baseUrl}}"], "path": ["api", "organizations"] }
+          }
+        },
+        {
+          "name": "Get Organization Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memberships",
+      "item": [
+        {
+          "name": "List Members",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/members", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "members"] }
+          }
+        },
+        {
+          "name": "Add Member to Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"colleague@example.com\",\n  \"role\": \"MEMBER\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/members", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "members"] }
+          }
+        },
+        {
+          "name": "Update Member Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"ADMIN\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/members/{{memberId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "members", "{{memberId}}"] }
+          }
+        },
+        {
+          "name": "Remove Member",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/members/{{memberId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "members", "{{memberId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Services",
+      "item": [
+        {
+          "name": "Create Service",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json?.data?.service?.id) {",
+                  "  pm.environment.set('serviceId', json.data.service.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Billing Engine\",\n  \"slug\": \"billing-engine\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/services", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "services"] }
+          }
+        },
+        {
+          "name": "List Organization Services",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/services?includeArchived=false", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "services"], "query": [{ "key": "includeArchived", "value": "false" }] }
+          }
+        },
+        {
+          "name": "Get Service Details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/services/{{serviceId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "services", "{{serviceId}}"] }
+          }
+        },
+        {
+          "name": "Update Service",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Core Billing Engine\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/services/{{serviceId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "services", "{{serviceId}}"] }
+          }
+        },
+        {
+          "name": "Archive Service",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/services/{{serviceId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "services", "{{serviceId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Incidents",
+      "item": [
+        {
+          "name": "Create Incident",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json?.data?.incident?.id) {",
+                  "  pm.environment.set('incidentId', json.data.incident.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Payment Gateway Timeouts\",\n  \"description\": \"Intermittent HTTP 504 gateway timeouts observed during checkout.\",\n  \"severity\": \"HIGH\",\n  \"serviceIds\": [\"{{serviceId}}\"]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents"] }
+          }
+        },
+        {
+          "name": "List Organization Incidents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Get Incident by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}"] }
+          }
+        },
+        {
+          "name": "Update Incident",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"severity\": \"CRITICAL\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Incident Lifecycle",
+      "item": [
+        {
+          "name": "Acknowledge Incident",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}/acknowledge", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}", "acknowledge"] }
+          }
+        },
+        {
+          "name": "Resolve Incident",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}/resolve", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}", "resolve"] }
+          }
+        },
+        {
+          "name": "Close Incident",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}/close", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}", "close"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Updates & Audit Timeline",
+      "item": [
+        {
+          "name": "Post Incident Update",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Engineering has applied rate-limiting fixes.\",\n  \"visibility\": \"PUBLIC\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}/updates", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}", "updates"] }
+          }
+        },
+        {
+          "name": "List Incident Updates",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}/updates", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}", "updates"] }
+          }
+        },
+        {
+          "name": "Get Incident Timeline",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/incidents/{{incidentId}}/timeline", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "incidents", "{{incidentId}}", "timeline"] }
+          }
+        },
+        {
+          "name": "Get Organization Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/audit-logs?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "audit-logs"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health & Public Status",
+      "item": [
+        {
+          "name": "Get Organization Health Rollup (Private)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/organizations/{{orgId}}/health", "host": ["{{baseUrl}}"], "path": ["api", "organizations", "{{orgId}}", "health"] }
+          }
+        },
+        {
+          "name": "Get Public Status Page (Unauthenticated)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/public/status/{{orgSlug}}", "host": ["{{baseUrl}}"], "path": ["api", "public", "status", "{{orgSlug}}"] }
+          }
+        }
+      ]
+    }
+  ]
+}
