@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as incidentController from "../controllers/incident.controller.js";
+import * as updateController from "../controllers/update.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requireOrgMember, requireRole } from "../middleware/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
@@ -9,6 +10,7 @@ import {
     transitionStatusSchema,
     listIncidentsQuerySchema
 } from "../validators/incident.validator.js";
+import { createUpdateSchema } from "../validators/update.validator.js";
 
 const router = Router({ mergeParams: true });
 
@@ -18,6 +20,17 @@ router.use(authenticate, requireOrgMember("organizationId"));
 // Read access: ADMIN, MEMBER, VIEWER
 router.get("/", validate(listIncidentsQuerySchema, "query"), incidentController.listIncidents);
 router.get("/:incidentId", incidentController.getIncident);
+
+// Incident updates and timeline
+router.get("/:incidentId/updates", updateController.listUpdates);
+router.get("/:incidentId/timeline", updateController.getIncidentTimeline);
+
+router.post(
+    "/:incidentId/updates",
+    requireRole("ADMIN", "MEMBER"),
+    validate(createUpdateSchema),
+    updateController.createUpdate
+);
 
 // Write access: ADMIN and MEMBER
 router.post(
